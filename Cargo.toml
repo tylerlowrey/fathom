@@ -1,0 +1,15 @@
+[package]
+name = "fathom"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+winit = "0.30.1"
+wgpu = "22.1.0"
+rayon = "1.10.0"
+pollster = "0.3.0"
+log = "0.4.22"
+env_logger = "0.11.5"
+bevy = { git = "https://github.com/bevyengine/bevy", branch = "main", default-features = false, features = [] }
+bytemuck = { version = "1.19.0", features = ["derive"] }
+rand = "0.8.5"
