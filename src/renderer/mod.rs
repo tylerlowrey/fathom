@@ -5,6 +5,7 @@ use bevy::prelude::*;
 use bevy::utils::HashMap;
 use bytemuck::{Pod, Zeroable};
 use wgpu::{CompositeAlphaMode, InstanceDescriptor, StoreOp};
+use log::{error};
 use crate::app::WindowState;
 use crate::renderer::mesh::{GpuMeshes, Mesh};
 use crate::renderer::pipeline::Pipelines;
@@ -56,12 +57,16 @@ pub fn initialize_render_resources(
     });
     commands.insert_resource(Shaders {
         loaded_shaders: HashMap::new(),
-    })
+    });
+    commands.insert_resource(GpuMeshes {
+        buffers_map: HashMap::new(),
+    });
 }
 
 pub fn add_default_render_resources(
     renderer_state: Res<RendererState>,
-    mut shaders: ResMut<Shaders>
+    mut shaders: ResMut<Shaders>,
+    mut pipelines: ResMut<Pipelines>,
 ) {
     let device = &renderer_state.as_ref().device;
     let shader = device.create_shader_module(
@@ -71,18 +76,9 @@ pub fn add_default_render_resources(
         }
     );
 
-    shaders.loaded_shaders.insert("vertex_buffers".into(), ("../../shaders/default.wgsl".into(), shader));
-}
+    shaders.loaded_shaders.insert(Shaders::default_shader_name(), ("../../shaders/default.wgsl".into(), shader));
 
-pub fn pre_render(
-    mut commands: Commands,
-    renderer_state: ResMut<RendererState>,
-    mut shaders: ResMut<Shaders>,
-    pipelines: Option<Res<Pipelines>>
-) {
-    let device = &renderer_state.as_ref().device;
-    if pipelines.is_none() {
-        let (_, shader_module) = shaders.loaded_shaders.get_mut(&Shaders::default_shader_name()).unwrap();
+    if let Some((_, shader_module)) = shaders.loaded_shaders.get(&Shaders::default_shader_name()) {
         let format = renderer_state.config.format.clone();
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: None,
@@ -91,7 +87,7 @@ pub fn pre_render(
                 module: &shader_module,
                 entry_point: "vertex_main",
                 compilation_options: Default::default(),
-                buffers: &[],
+                buffers: &[Vertex::vertex_buf_layout()],
             },
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::TriangleList,
@@ -110,19 +106,23 @@ pub fn pre_render(
             cache: None,
         });
 
-        let mut registered_pipelines = HashMap::new();
-        registered_pipelines.insert(1, render_pipeline);
-        let mut shader_to_pipeline_id_map = HashMap::new();
-        shader_to_pipeline_id_map.insert(
+
+        pipelines.registered_pipelines.insert(1, render_pipeline);
+        pipelines.shader_to_pipeline_id_map.insert(
             (Shaders::default_shader_name(), Shaders::default_shader_name()),
             1
         );
-
-        commands.insert_resource(Pipelines {
-            registered_pipelines,
-            shader_to_pipeline_id_map,
-        });
+    } else {
+        error!("Unable to create default pipeline because default shaders were not loaded");
     }
+}
+
+pub fn pre_render(
+    _commands: Commands,
+    _renderer_state: ResMut<RendererState>,
+    _shaders: ResMut<Shaders>,
+    _pipelines: Res<Pipelines>
+) {
 }
 
 pub fn render(
@@ -142,8 +142,9 @@ pub fn render(
         });
         for (renderable, mesh) in &renderable_entities {
             let pipeline_opt = &pipelines.registered_pipelines
-                .get(&renderable.pipline_id);
-            let vertex_buffer_opt = gpu_meshes.buffers_map.get(&mesh.gpu_buffer_id);
+                .get(&pipelines.get_pipeline_id(mesh.vertex_shader_name.clone(), mesh.fragment_shader_name.clone()));
+            let vertex_buffer_opt = gpu_meshes.buffers_map.get(&mesh.vertex_buffer_id);
+
 
             if let (Some(pipeline), Some(vertex_buffer)) = (pipeline_opt, vertex_buffer_opt) {
                 let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -152,7 +153,7 @@ pub fn render(
                         view: &view,
                         resolve_target: None,
                         ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(wgpu::Color {r: 0.05, g:0.062, b:0.08, a:1.0}),
+                            load: wgpu::LoadOp::Load,
                             store: StoreOp::Store,
                         },
                     })],
@@ -162,9 +163,14 @@ pub fn render(
                 });
                 render_pass.set_pipeline(pipeline);
                 render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
-                render_pass.draw(0..mesh.num_vertices() as u32, 0..1);
+                if let Some(Some(index_buffer)) = &mesh.has_indices().then(|| gpu_meshes.buffers_map.get(&mesh.index_buffer_id)) {
+                    render_pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+                    render_pass.draw_indexed(0..mesh.num_indices() as u32, 0, 0..1);
+                } else {
+                    render_pass.draw(0..mesh.num_vertices() as u32, 0..1);
+                }
             } else {
-                error!("Unable to perform render pass for pipeline_id={} | buffer_id={}", renderable.pipline_id, mesh.gpu_buffer_id);
+                error!("Unable to perform render pass for pipeline_id={} | vertex_buffer_id={}", renderable.pipline_id, mesh.vertex_buffer_id);
             }
         }
 
@@ -205,7 +211,6 @@ pub struct RendererState {
 }
 
 type ShaderName = String;
-type ShaderId = u64;
 type ShaderPath = String;
 #[derive(Resource)]
 pub struct Shaders {
@@ -213,7 +218,7 @@ pub struct Shaders {
 }
 
 impl Shaders {
-    fn default_shader_name() -> String {
+    pub fn default_shader_name() -> String {
         "default.wgsl".into()
     }
 }
@@ -227,6 +232,21 @@ pub struct Renderable {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
 pub struct Vertex {
-    position: [f32; 2],
-    color: [f32; 3],
+    pub position: [f32; 2],
+    pub color: [f32; 3],
+}
+
+impl Vertex {
+    const ATTRIBUTES: [wgpu::VertexAttribute; 2] = wgpu::vertex_attr_array![
+        0 => Float32x2,
+        1 => Float32x3
+    ];
+
+    pub fn vertex_buf_layout<'a>() -> wgpu::VertexBufferLayout<'a> {
+        wgpu::VertexBufferLayout {
+            array_stride: size_of::<Vertex>() as wgpu::BufferAddress,
+            step_mode: wgpu::VertexStepMode::Vertex,
+            attributes: &Self::ATTRIBUTES,
+        }
+    }
 }
