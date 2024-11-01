@@ -9,6 +9,7 @@ pub struct Pipelines {
 }
 
 impl Pipelines {
+    // TODO: refactor this so that we don't need to clone the ShaderName strings
     pub fn get_pipeline_id(&self, vertex_shader: ShaderName, fragment_shader: ShaderName) -> u64 {
         self.shader_to_pipeline_id_map.get(&(vertex_shader, fragment_shader))
             .unwrap_or(&0u64).clone()
