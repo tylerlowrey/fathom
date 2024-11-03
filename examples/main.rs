@@ -1,14 +1,14 @@
 use bevy::prelude::{Commands, ResMut, Resource};
 use log::{error, info};
 use fathom::app::{schedule, GameApplication};
-use fathom::renderer::mesh::Mesh;
-use fathom::renderer::{Shaders, Vertex};
+use fathom::renderer::mesh::{Mesh, Mesh2D};
+use fathom::renderer::{Shaders, Vertex, Vertex2D};
 
 fn main() {
     env_logger::builder().filter_level(log::LevelFilter::Info).init();
     let mut app = GameApplication::new();
 
-    app.add_renderer();
+    app.add_renderer_2d();
     app.add_system_to_schedule(schedule::Startup, startup);
     app.add_system_to_schedule(schedule::Update, update);
 
@@ -26,23 +26,23 @@ fn startup(mut commands: Commands) {
         count: 0
     });
 
-    commands.spawn(Mesh::new(
-        Shaders::default_shader_name(),
-        Shaders::default_shader_name(),
+    commands.spawn(Mesh2D::new(
+        Shaders::default_2d_shader_name(),
+        Shaders::default_2d_shader_name(),
         vec![
-            Vertex { position: [0.0, 0.5], color: [1.0, 0.0, 0.0] },
-            Vertex { position: [-0.5, -0.5], color: [1.0, 0.0, 0.0] },
-            Vertex { position: [0.5, -0.5], color: [1.0, 0.0, 0.0] },
+            Vertex2D { position: [0.0, 0.5], color: [1.0, 0.0, 0.0] },
+            Vertex2D { position: [-0.5, -0.5], color: [1.0, 0.0, 0.0] },
+            Vertex2D { position: [0.5, -0.5], color: [1.0, 0.0, 0.0] },
         ]
     ));
 
-    commands.spawn(Mesh::new(
-        Shaders::default_shader_name(),
-        Shaders::default_shader_name(),
+    commands.spawn(Mesh2D::new(
+        Shaders::default_2d_shader_name(),
+        Shaders::default_2d_shader_name(),
         vec![
-            Vertex { position: [0.0, 0.75], color: [0.0, 1.0, 0.0] },
-            Vertex { position: [-0.75, 0.75], color: [0.0, 1.0, 0.0] },
-            Vertex { position: [-0.75, 0.0], color: [0.0, 1.0, 0.0] },
+            Vertex2D { position: [0.0, 0.75], color: [0.0, 1.0, 0.0] },
+            Vertex2D { position: [-0.75, 0.75], color: [0.0, 1.0, 0.0] },
+            Vertex2D { position: [-0.75, 0.0], color: [0.0, 1.0, 0.0] },
         ]
     ));
 }

@@ -7,8 +7,8 @@ use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::error::EventLoopError;
 use log::info;
 use crate::app::schedule::{Startup, Render, Update, PreRender, Initialization};
-use crate::renderer::{add_default_render_resources, initialize_render_resources, initialize_renderer, pre_render, render, Renderable};
-use crate::renderer::mesh::{create_gpu_buffer_for_mesh, setup_on_add_hook_for_mesh};
+use crate::renderer::{add_default_2d_render_resources, add_default_render_resources, initialize_render_resources, initialize_renderer, pre_render, render, render2d};
+use crate::renderer::mesh::{create_gpu_buffer_for_mesh2d, setup_on_add_hook_for_mesh, setup_on_add_hook_for_mesh2d};
 
 pub struct GameApplication {
     world: World,
@@ -51,7 +51,19 @@ impl GameApplication {
         schedules.add_systems(schedule, system);
     }
 
-    pub fn add_renderer(&mut self) {
+    pub fn add_renderer_2d(&mut self) {
+        let mut schedules = self.world.resource_mut::<Schedules>();
+        schedules.add_systems(Initialization, (
+            initialize_renderer,
+            initialize_render_resources,
+            add_default_2d_render_resources,
+            setup_on_add_hook_for_mesh2d
+        ).chain());
+        schedules.add_systems(PreRender, pre_render);
+        schedules.add_systems(Render, render2d);
+    }
+
+    pub fn add_renderer_3d(&mut self) {
         let mut schedules = self.world.resource_mut::<Schedules>();
         schedules.add_systems(Initialization, (
             initialize_renderer,
@@ -61,8 +73,6 @@ impl GameApplication {
         ).chain());
         schedules.add_systems(PreRender, pre_render);
         schedules.add_systems(Render, render);
-        let component_hooks = self.world.register_component_hooks::<Renderable>();
-        component_hooks.on_add(create_gpu_buffer_for_mesh);
     }
 }
 
