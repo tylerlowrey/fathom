@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use bevy::utils::HashMap;
-use crate::renderer::{ShaderName};
+use crate::assets::shaders::ShaderName;
 
 #[derive(Resource)]
 pub struct Pipelines {

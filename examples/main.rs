@@ -1,8 +1,9 @@
 use bevy::prelude::{Commands, ResMut, Resource};
 use log::{error, info};
 use fathom::app::{schedule, GameApplication};
+use fathom::assets::shaders::Shaders;
 use fathom::renderer::mesh::{Mesh, Mesh2D};
-use fathom::renderer::{Shaders, Vertex, Vertex2D};
+use fathom::renderer::{Vertex2D};
 
 fn main() {
     env_logger::builder().filter_level(log::LevelFilter::Info).init();

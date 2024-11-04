@@ -8,7 +8,7 @@ use winit::error::EventLoopError;
 use log::info;
 use crate::app::schedule::{Startup, Render, Update, PreRender, Initialization};
 use crate::renderer::{add_default_2d_render_resources, add_default_render_resources, initialize_render_resources, initialize_renderer, pre_render, render, render2d};
-use crate::renderer::mesh::{create_gpu_buffer_for_mesh2d, setup_on_add_hook_for_mesh, setup_on_add_hook_for_mesh2d};
+use crate::renderer::mesh::{setup_on_add_hook_for_mesh, setup_on_add_hook_for_mesh2d};
 
 pub struct GameApplication {
     world: World,

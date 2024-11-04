@@ -7,6 +7,8 @@ use bytemuck::{Pod, Zeroable};
 use wgpu::{CompositeAlphaMode, InstanceDescriptor, StoreOp};
 use log::{error};
 use crate::app::WindowState;
+use crate::assets::Assets;
+use crate::assets::shaders::Shaders;
 use crate::renderer::mesh::{GpuMeshes, Mesh, Mesh2D};
 use crate::renderer::pipeline::Pipelines;
 
@@ -76,9 +78,9 @@ pub fn add_default_render_resources(
         }
     );
 
-    shaders.loaded_shaders.insert(Shaders::default_shader_name(), ("../../shaders/default.wgsl".into(), shader));
+    shaders.loaded_shaders.insert(1,  shader);
 
-    if let Some((_, shader_module)) = shaders.loaded_shaders.get(&Shaders::default_shader_name()) {
+    if let Some(shader_module) = shaders.loaded_shaders.get(&1) {
         let format = renderer_state.config.format.clone();
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: None,
@@ -130,9 +132,9 @@ pub fn add_default_2d_render_resources(
         }
     );
 
-    shaders.loaded_shaders.insert(Shaders::default_2d_shader_name(), ("../../shaders/default_2d.wgsl".into(), shader));
+    shaders.loaded_shaders.insert(2, shader);
 
-    if let Some((_, shader_module)) = shaders.loaded_shaders.get(&Shaders::default_2d_shader_name()) {
+    if let Some(shader_module) = shaders.loaded_shaders.get(&2) {
         let format = renderer_state.config.format.clone();
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: None,
@@ -319,22 +321,7 @@ pub struct RendererState {
     queue: wgpu::Queue,
 }
 
-type ShaderName = String;
-type ShaderPath = String;
-#[derive(Resource)]
-pub struct Shaders {
-    loaded_shaders: HashMap<ShaderName, (ShaderPath, wgpu::ShaderModule)>
-}
 
-impl Shaders {
-    pub fn default_2d_shader_name() -> String {
-        "default_2d.wgsl".into()
-    }
-
-    pub fn default_shader_name() -> String {
-        "default_2d.wgsl".into()
-    }
-}
 
 /// Each entity that will be rendered must have this component
 #[derive(Component, Default)]

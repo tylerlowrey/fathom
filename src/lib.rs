@@ -2,4 +2,5 @@
 /// supports basic mesh drawing
 pub mod app;
 pub mod renderer;
+pub mod assets;
 

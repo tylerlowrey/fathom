@@ -1,7 +1,8 @@
 use bevy::prelude::Commands;
 use fathom::app::{schedule, GameApplication};
+use fathom::assets::shaders::Shaders;
 use fathom::renderer::mesh::Mesh;
-use fathom::renderer::{Shaders, Vertex};
+use fathom::renderer::{Vertex};
 
 fn main() {
     let mut app = GameApplication::new();
