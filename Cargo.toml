@@ -13,9 +13,14 @@ rayon = "1.10.0"
 pollster = "0.3.0"
 log = "0.4.22"
 env_logger = "0.11.5"
-bevy = { git = "https://github.com/bevyengine/bevy", branch = "main", default-features = false, features = [] }
 bytemuck = { version = "1.19.0", features = ["derive"] }
 rand = "0.8.5"
+
+[dependencies.bevy]
+git = "https://github.com/bevyengine/bevy"
+branch = "main"
+default-features = false
+features = ["bevy_asset"]
 
 [[example]]
 name = "3d_offset_square"

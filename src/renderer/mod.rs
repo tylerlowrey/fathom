@@ -7,8 +7,7 @@ use bytemuck::{Pod, Zeroable};
 use wgpu::{CompositeAlphaMode, InstanceDescriptor, StoreOp};
 use log::{error};
 use crate::app::WindowState;
-use crate::assets::Assets;
-use crate::assets::shaders::Shaders;
+use crate::assets::shaders::{Shader, ShadersState, DEFAULT_2D_SHADER, DEFAULT_3D_SHADER};
 use crate::renderer::mesh::{GpuMeshes, Mesh, Mesh2D};
 use crate::renderer::pipeline::Pipelines;
 
@@ -52,35 +51,53 @@ pub fn initialize_renderer(mut commands: Commands, window_state: ResMut<WindowSt
 
 pub fn initialize_render_resources(
     mut commands: Commands,
+    mut asset_server: ResMut<AssetServer>,
 ) {
+    let default_3d_shader: Handle<Shader> = asset_server.load(DEFAULT_3D_SHADER);
+    let default_2d_shader: Handle<Shader>= asset_server.load(DEFAULT_2D_SHADER);
+
     commands.insert_resource(Pipelines {
         registered_pipelines: HashMap::new(),
         shader_to_pipeline_id_map: HashMap::new(),
     });
-    commands.insert_resource(Shaders {
-        loaded_shaders: HashMap::new(),
-    });
+
+    let mut shader_state = ShadersState {
+        loaded_shader_modules: HashMap::new(),
+        shader_handles: Vec::new(),
+    };
+
+    shader_state.shader_handles.push(default_3d_shader);
+    shader_state.shader_handles.push(default_2d_shader);
+
+    commands.insert_resource(shader_state);
     commands.insert_resource(GpuMeshes {
         buffers_map: HashMap::new(),
     });
+
 }
 
 pub fn add_default_render_resources(
     renderer_state: Res<RendererState>,
-    mut shaders: ResMut<Shaders>,
+    mut shaders_state: ResMut<ShadersState>,
     mut pipelines: ResMut<Pipelines>,
+    mut shader_assets: ResMut<Assets<Shader>>,
 ) {
     let device = &renderer_state.as_ref().device;
-    let shader = device.create_shader_module(
+    let shader_handle = shaders_state.shader_handles.get(0)
+        .expect("No shader handles available. Default shader should be the first element")
+        .clone();
+    let default_shader = shader_assets.get(&shader_handle.clone())
+        .expect("Could not get default shader from provided handle");
+    let shader_module = device.create_shader_module(
         wgpu::ShaderModuleDescriptor {
             label: Some("default_3d_shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("../../shaders/default.wgsl").into()) ,
+            source: wgpu::ShaderSource::Wgsl(default_shader.shader_content.clone().into()) ,
         }
     );
 
-    shaders.loaded_shaders.insert(1,  shader);
+    shaders_state.loaded_shader_modules.insert(shader_handle.clone(), shader_module);
 
-    if let Some(shader_module) = shaders.loaded_shaders.get(&1) {
+    if let Some(shader_module) = shaders_state.loaded_shader_modules.get(&shader_handle.clone()) {
         let format = renderer_state.config.format.clone();
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: None,
@@ -111,7 +128,7 @@ pub fn add_default_render_resources(
 
         pipelines.registered_pipelines.insert(1, render_pipeline);
         pipelines.shader_to_pipeline_id_map.insert(
-            (Shaders::default_shader_name(), Shaders::default_shader_name()),
+            shader_handle.clone(),
             1
         );
     } else {
@@ -121,20 +138,28 @@ pub fn add_default_render_resources(
 
 pub fn add_default_2d_render_resources(
     renderer_state: Res<RendererState>,
-    mut shaders: ResMut<Shaders>,
+    mut shaders_state: ResMut<ShadersState>,
     mut pipelines: ResMut<Pipelines>,
+    mut shader_assets: ResMut<Assets<Shader>>,
 ) {
     let device = &renderer_state.as_ref().device;
-    let shader = device.create_shader_module(
+    let shader_handle = shaders_state.shader_handles.get(1)
+        .expect("No shader handles available. Default shader should be the first element")
+        .clone();
+    let default_shader = shader_assets.get(&shader_handle.clone())
+        .expect("Could not get default shader from provided handle");
+    let shader_module = device.create_shader_module(
         wgpu::ShaderModuleDescriptor {
             label: Some("default_2d_shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("../../shaders/default_2d.wgsl").into()) ,
+            source: wgpu::ShaderSource::Wgsl(default_shader.shader_content.clone().into()) ,
         }
     );
 
-    shaders.loaded_shaders.insert(2, shader);
 
-    if let Some(shader_module) = shaders.loaded_shaders.get(&2) {
+
+    shaders_state.loaded_shader_modules.insert(shader_handle.clone(), shader_module);
+
+    if let Some(shader_module) = shaders_state.loaded_shader_modules.get(&shader_handle.clone()) {
         let format = renderer_state.config.format.clone();
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: None,
@@ -163,9 +188,9 @@ pub fn add_default_2d_render_resources(
         });
 
 
-        pipelines.registered_pipelines.insert(1, render_pipeline);
+        pipelines.registered_pipelines.insert(2, render_pipeline);
         pipelines.shader_to_pipeline_id_map.insert(
-            (Shaders::default_2d_shader_name(), Shaders::default_2d_shader_name()),
+            shader_handle.clone(),
             2
         );
     } else {
@@ -176,7 +201,7 @@ pub fn add_default_2d_render_resources(
 pub fn pre_render(
     _commands: Commands,
     _renderer_state: ResMut<RendererState>,
-    _shaders: ResMut<Shaders>,
+    _shaders: ResMut<ShadersState>,
     _pipelines: Res<Pipelines>
 ) {
 }
@@ -198,7 +223,7 @@ pub fn render2d(
         });
         for (renderable, mesh) in &renderable_entities {
             let pipeline_opt = &pipelines.registered_pipelines
-                .get(&pipelines.get_pipeline_id(mesh.vertex_shader_name.clone(), mesh.fragment_shader_name.clone()));
+                .get(&pipelines.get_pipeline_id(&mesh.vertex_shader_handle));
             let vertex_buffer_opt = gpu_meshes.buffers_map.get(&mesh.vertex_buffer_id);
 
 
@@ -253,7 +278,7 @@ pub fn render(
         });
         for (renderable, mesh) in &renderable_entities {
             let pipeline_opt = &pipelines.registered_pipelines
-                .get(&pipelines.get_pipeline_id(mesh.vertex_shader_name.clone(), mesh.fragment_shader_name.clone()));
+                .get(&pipelines.get_pipeline_id(&mesh.vertex_shader_handle));
             let vertex_buffer_opt = gpu_meshes.buffers_map.get(&mesh.vertex_buffer_id);
 
 

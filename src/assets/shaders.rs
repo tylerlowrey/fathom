@@ -1,46 +1,28 @@
-use bevy::prelude::Resource;
+use bevy::prelude::{Asset, Handle, Resource, TypePath};
 use bevy::utils::HashMap;
-use rand::random;
-use crate::assets::{AssetId, AssetType, Assets};
+
+pub const DEFAULT_3D_SHADER: &'static str = "shaders/default.wgsl";
+pub const DEFAULT_2D_SHADER: &'static str = "shaders/default_2d.wgsl";
 
 pub type ShaderName = String;
 pub type ShaderPath = String;
 #[derive(Resource)]
-pub struct Shaders {
-    pub(crate) loaded_shaders: HashMap<AssetId, wgpu::ShaderModule>
+pub struct ShadersState {
+    pub(crate) loaded_shader_modules: HashMap<Handle<Shader>, wgpu::ShaderModule>,
+    pub shader_handles: Vec<Handle<Shader>>,
 }
 
-impl Shaders {
-    pub fn default_2d_shader_name() -> String {
-        "default_2d.wgsl".into()
+impl ShadersState {
+    pub fn default_2d_shader_id() -> u64 {
+        2
     }
 
-    pub fn default_shader_name() -> String {
-        "default_2d.wgsl".into()
+    pub fn default_shader_id() -> u64 {
+        1
     }
 }
 
+#[derive(Asset, TypePath)]
 pub struct Shader {
-    shader_content: String,
-}
-
-impl Assets {
-    fn load_shader(&mut self, path: &str) -> AssetId {
-        // TODO: Return a result or fail in a useful way instead of unwrapping
-        let shader_content = std::fs::read_to_string(path).unwrap();
-        let id = random();
-        self.loaded_assets.insert(id, AssetType::Shader(Shader {
-            shader_content,
-        }));
-
-        id
-    }
-
-    fn get_shader(&self, id: &AssetId) -> Option<&Shader> {
-        if let Some(AssetType::Shader(shader)) = self.loaded_assets.get(id) {
-            Some(shader)
-        } else {
-            None
-        }
-    }
+    pub(crate) shader_content: String,
 }

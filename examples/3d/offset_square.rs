@@ -1,6 +1,7 @@
-use bevy::prelude::Commands;
+use bevy::prelude::*;
 use fathom::app::{schedule, GameApplication};
-use fathom::assets::shaders::Shaders;
+use fathom::assets::Assets;
+use fathom::assets::shaders::ShadersState;
 use fathom::renderer::mesh::Mesh;
 use fathom::renderer::{Vertex};
 
@@ -13,10 +14,14 @@ fn main() {
     let _ = app.run().unwrap();
 }
 
-fn startup(mut commands: Commands) {
+fn startup(
+    mut commands: Commands,
+    mut assets: ResMut<Assets>
+) {
+    assets.load_shader("shaders/default.wgsl");
     commands.spawn(Mesh::with_indices(
-        Shaders::default_shader_name(),
-        Shaders::default_shader_name(),
+        ShadersState::default_shader_id(),
+        ShadersState::default_shader_id(),
         vec![
             Vertex { position: [3.0, 3.0, -1.0], color: [0.0, 0.0, 1.0] },
             Vertex { position: [3.0, 1.0, -1.0], color: [0.0, 0.0, 1.0] },

@@ -7,6 +7,7 @@ use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::error::EventLoopError;
 use log::info;
 use crate::app::schedule::{Startup, Render, Update, PreRender, Initialization};
+use crate::assets::{initialize_asset_server};
 use crate::renderer::{add_default_2d_render_resources, add_default_render_resources, initialize_render_resources, initialize_renderer, pre_render, render, render2d};
 use crate::renderer::mesh::{setup_on_add_hook_for_mesh, setup_on_add_hook_for_mesh2d};
 
@@ -25,6 +26,7 @@ impl GameApplication {
         let mut world = World::new();
         world.add_schedule(Schedule::new(Initialization));
         world.add_schedule(Schedule::new(Startup));
+        world.add_schedule(Schedule::new(PostStartup));
         world.add_schedule(Schedule::new(Update));
         world.add_schedule(Schedule::new(PreRender));
         world.add_schedule(Schedule::new(Render));
@@ -55,6 +57,7 @@ impl GameApplication {
         let mut schedules = self.world.resource_mut::<Schedules>();
         schedules.add_systems(Initialization, (
             initialize_renderer,
+            initialize_asset_server,
             initialize_render_resources,
             add_default_2d_render_resources,
             setup_on_add_hook_for_mesh2d
@@ -67,6 +70,7 @@ impl GameApplication {
         let mut schedules = self.world.resource_mut::<Schedules>();
         schedules.add_systems(Initialization, (
             initialize_renderer,
+            initialize_asset_server,
             initialize_render_resources,
             add_default_render_resources,
             setup_on_add_hook_for_mesh
@@ -97,6 +101,7 @@ impl ApplicationHandler for GameApplication {
                 if !self.startup_finished {
                     world.run_schedule(Initialization);
                     world.run_schedule(Startup);
+                    world.run_schedule(PostStartup);
                     self.startup_finished = true;
                 }
                 world.run_schedule(Update);
@@ -142,6 +147,10 @@ pub mod schedule {
     /// This schedule gets run once before Update, PreRender, and Render get run for the first time
     #[derive(ScheduleLabel, Clone, Debug, Eq, PartialEq, Hash)]
     pub struct Startup;
+
+    /// This schedule gets run once after Startup
+    #[derive(ScheduleLabel, Clone, Debug, Eq, PartialEq, Hash)]
+    pub struct PostStartup;
 
     /// This schedule gets run before the render schedule. Systems that do not impact rendering should go here
     #[derive(ScheduleLabel, Clone, Debug, Eq, PartialEq, Hash)]
