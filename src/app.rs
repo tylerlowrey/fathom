@@ -30,6 +30,8 @@ impl GameApplication {
         world.add_schedule(Schedule::new(Update));
         world.add_schedule(Schedule::new(PreRender));
         world.add_schedule(Schedule::new(Render));
+        world.add_schedule(Schedule::new(Last));
+        world.init_resource::<AppTypeRegistry>();
 
         Self {
             world,
@@ -107,6 +109,7 @@ impl ApplicationHandler for GameApplication {
                 world.run_schedule(Update);
                 world.run_schedule(PreRender);
                 world.run_schedule(Render);
+                world.run_schedule(Last);
             }
             _ => ()
         }
@@ -160,7 +163,11 @@ pub mod schedule {
     #[derive(ScheduleLabel, Clone, Debug, Eq, PartialEq, Hash)]
     pub struct PreRender;
 
-    /// This schedule gets run last on each event loop cycle. Systems that render MUST go here
+    /// This schedule gets run right before the last on each event loop cycle. Systems that render MUST go here
     #[derive(ScheduleLabel, Clone, Debug, Eq, PartialEq, Hash)]
     pub struct Render;
+
+    /// This schedule is always run last
+    #[derive(ScheduleLabel, Clone, Debug, Eq, PartialEq, Hash)]
+    pub struct Last;
 }

@@ -6,7 +6,7 @@ use fathom::renderer::mesh::{Mesh, Mesh2D};
 use fathom::renderer::{Vertex2D};
 
 fn main() {
-    env_logger::builder().filter_level(log::LevelFilter::Info).init();
+    env_logger::builder().filter_level(log::LevelFilter::Debug).init();
     let mut app = GameApplication::new();
 
     app.add_renderer_3d();

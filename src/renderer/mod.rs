@@ -1,6 +1,8 @@
 pub mod mesh;
+pub mod camera;
 mod pipeline;
 
+use bevy::asset::{handle_internal_asset_events, LoadState};
 use bevy::prelude::*;
 use bevy::utils::HashMap;
 use bytemuck::{Pod, Zeroable};
@@ -8,6 +10,7 @@ use wgpu::{CompositeAlphaMode, InstanceDescriptor, StoreOp};
 use log::{error};
 use crate::app::WindowState;
 use crate::assets::shaders::{Shader, ShadersState, DEFAULT_2D_SHADER, DEFAULT_3D_SHADER};
+use crate::assets::tick_task_pools;
 use crate::renderer::mesh::{GpuMeshes, Mesh, Mesh2D};
 use crate::renderer::pipeline::Pipelines;
 
@@ -50,13 +53,45 @@ pub fn initialize_renderer(mut commands: Commands, window_state: ResMut<WindowSt
 }
 
 pub fn initialize_render_resources(
-    mut commands: Commands,
-    mut asset_server: ResMut<AssetServer>,
+    mut world: &mut World,
 ) {
+    let asset_server = world.get_resource::<AssetServer>().unwrap();
     let default_3d_shader: Handle<Shader> = asset_server.load(DEFAULT_3D_SHADER);
     let default_2d_shader: Handle<Shader>= asset_server.load(DEFAULT_2D_SHADER);
 
-    commands.insert_resource(Pipelines {
+    let load_state = asset_server.get_load_state(&default_3d_shader);
+    log::debug!("**** Load state is: {:?}", load_state);
+
+    tick_task_pools();
+
+    let load_state = asset_server.get_load_state(&default_3d_shader);
+    log::debug!("**** Load state is: {:?}", load_state);
+
+    handle_internal_asset_events(world);
+
+    let asset_server = world.get_resource::<AssetServer>().unwrap();
+    loop {
+        if let Some(load_state) = asset_server.get_load_state(&default_3d_shader){
+            match load_state {
+                LoadState::Loading => {
+                    log::debug!("**** Loading shader...");
+                    tick_task_pools()
+                },
+                LoadState::Loaded => break,
+                _ => log::debug!("**** Load state is: {:?}", load_state)
+            }
+        }
+    }
+
+    let new_handle = default_3d_shader.clone();
+
+    if default_3d_shader == new_handle {
+        log::debug!("Cloned handles are the same {:?} == {:?}", default_3d_shader, new_handle);
+    } else {
+        log::debug!("Cloned handles are NOT the same {:?} != {:?}", default_3d_shader, new_handle);
+    }
+
+    world.insert_resource(Pipelines {
         registered_pipelines: HashMap::new(),
         shader_to_pipeline_id_map: HashMap::new(),
     });
@@ -69,8 +104,8 @@ pub fn initialize_render_resources(
     shader_state.shader_handles.push(default_3d_shader);
     shader_state.shader_handles.push(default_2d_shader);
 
-    commands.insert_resource(shader_state);
-    commands.insert_resource(GpuMeshes {
+    world.insert_resource(shader_state);
+    world.insert_resource(GpuMeshes {
         buffers_map: HashMap::new(),
     });
 
@@ -82,12 +117,20 @@ pub fn add_default_render_resources(
     mut pipelines: ResMut<Pipelines>,
     mut shader_assets: ResMut<Assets<Shader>>,
 ) {
+    tick_task_pools();
     let device = &renderer_state.as_ref().device;
     let shader_handle = shaders_state.shader_handles.get(0)
         .expect("No shader handles available. Default shader should be the first element")
         .clone();
     let default_shader = shader_assets.get(&shader_handle.clone())
         .expect("Could not get default shader from provided handle");
+
+    log::debug!("*** DEFAULT SHADER START");
+    log::debug!("================");
+    log::debug!("\n{}\n", default_shader.shader_content.clone());
+    log::debug!("================");
+    log::debug!("*** DEFAULT SHADER END");
+
     let shader_module = device.create_shader_module(
         wgpu::ShaderModuleDescriptor {
             label: Some("default_3d_shader"),
