@@ -1,4 +1,3 @@
-use std::sync::OnceLock;
 use bevy::asset::{AssetEvents, AssetLoadFailedEvent, AssetServerMode, TrackAssets};
 use bevy::asset::io::{AssetSourceBuilders};
 use bevy::ecs::event::EventRegistry;
@@ -15,7 +14,7 @@ const DEFAULT_COMPUTE_THREADS_COUNT: usize = 2;
 pub mod shaders;
 
 
-pub fn initialize_asset_server(mut world: &mut World) {
+pub fn initialize_asset_server(world: &mut World) {
     create_task_pools();
 
     let mut builders: AssetSourceBuilders = Default::default();
@@ -60,9 +59,9 @@ pub fn create_task_pools() {
     let async_compute_threads = DEFAULT_ASYNC_COMPUTE_THREADS_COUNT;
     let compute_threads = DEFAULT_COMPUTE_THREADS_COUNT;
 
-    debug!("number of IO Threads: {}", io_threads);
-    debug!("number of async compute Threads: {}", io_threads);
-    debug!("number of compute Threads: {}", io_threads);
+    log::debug!("number of IO Threads: {}", io_threads);
+    log::debug!("number of async compute Threads: {}", io_threads);
+    log::debug!("number of compute Threads: {}", io_threads);
 
     IoTaskPool::get_or_init(|| {
         TaskPoolBuilder::default()
@@ -87,7 +86,6 @@ pub fn create_task_pools() {
 }
 
 pub fn tick_task_pools() {
-    /*
     ComputeTaskPool::get()
         .with_local_executor(|compute_local_executor| {
             AsyncComputeTaskPool::get()
@@ -102,8 +100,6 @@ pub fn tick_task_pools() {
                         });
                 });
         });
-
-     */
 }
 
 // TODO: Use the Assets::<A>::asset_events_condition from bevy_asset instead (Can't do this currently because it is pub(crate) and not pub

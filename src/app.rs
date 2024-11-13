@@ -7,8 +7,8 @@ use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::error::EventLoopError;
 use log::info;
 use crate::app::schedule::{Startup, Render, Update, PreRender, Initialization};
-use crate::assets::{initialize_asset_server};
-use crate::renderer::{add_default_2d_render_resources, add_default_render_resources, initialize_render_resources, initialize_renderer, pre_render, render, render2d};
+use crate::assets::{initialize_asset_server, tick_task_pools};
+use crate::renderer::{add_default_2d_render_resources, add_default_render_resources, initialize_render_resources, initialize_renderer, pre_render, render3d, render2d};
 use crate::renderer::mesh::{setup_on_add_hook_for_mesh, setup_on_add_hook_for_mesh2d};
 
 pub struct GameApplication {
@@ -66,6 +66,7 @@ impl GameApplication {
         ).chain());
         schedules.add_systems(PreRender, pre_render);
         schedules.add_systems(Render, render2d);
+        schedules.add_systems(Last, tick_task_pools);
     }
 
     pub fn add_renderer_3d(&mut self) {
@@ -78,7 +79,8 @@ impl GameApplication {
             setup_on_add_hook_for_mesh
         ).chain());
         schedules.add_systems(PreRender, pre_render);
-        schedules.add_systems(Render, render);
+        schedules.add_systems(Render, render3d);
+        schedules.add_systems(Last, tick_task_pools);
     }
 }
 

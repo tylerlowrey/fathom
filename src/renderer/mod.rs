@@ -1,18 +1,21 @@
 pub mod mesh;
 pub mod camera;
 mod pipeline;
+pub mod vertex;
 
+use std::f32::consts::PI;
 use bevy::asset::{handle_internal_asset_events, LoadState};
 use bevy::prelude::*;
 use bevy::utils::HashMap;
-use bytemuck::{Pod, Zeroable};
 use wgpu::{CompositeAlphaMode, InstanceDescriptor, StoreOp};
 use log::{error};
 use crate::app::WindowState;
 use crate::assets::shaders::{Shader, ShadersState, DEFAULT_2D_SHADER, DEFAULT_3D_SHADER};
 use crate::assets::tick_task_pools;
+use crate::renderer::camera::Camera;
 use crate::renderer::mesh::{GpuMeshes, Mesh, Mesh2D};
 use crate::renderer::pipeline::Pipelines;
+use crate::renderer::vertex::{Vertex, Vertex2D};
 
 pub fn initialize_renderer(mut commands: Commands, window_state: ResMut<WindowState>) {
     let window = window_state.clone_window();
@@ -94,6 +97,7 @@ pub fn initialize_render_resources(
     world.insert_resource(Pipelines {
         registered_pipelines: HashMap::new(),
         shader_to_pipeline_id_map: HashMap::new(),
+        render_pipeline_state: HashMap::new(),
     });
 
     let mut shader_state = ShadersState {
@@ -115,7 +119,7 @@ pub fn add_default_render_resources(
     renderer_state: Res<RendererState>,
     mut shaders_state: ResMut<ShadersState>,
     mut pipelines: ResMut<Pipelines>,
-    mut shader_assets: ResMut<Assets<Shader>>,
+    shader_assets: Res<Assets<Shader>>,
 ) {
     tick_task_pools();
     let device = &renderer_state.as_ref().device;
@@ -140,40 +144,31 @@ pub fn add_default_render_resources(
 
     shaders_state.loaded_shader_modules.insert(shader_handle.clone(), shader_module);
 
-    if let Some(shader_module) = shaders_state.loaded_shader_modules.get(&shader_handle.clone()) {
+    if let (Some(vertex_shader_module), Some(fragment_shader_module)) =
+        (shaders_state.loaded_shader_modules.get(&shader_handle.clone()), shaders_state.loaded_shader_modules.get(&shader_handle.clone())) {
         let format = renderer_state.config.format.clone();
-        let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: None,
-            layout: None,
-            vertex: wgpu::VertexState {
-                module: &shader_module,
-                entry_point: "vertex_main",
-                compilation_options: Default::default(),
-                buffers: &[Vertex::vertex_buf_layout()],
-            },
-            primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleList,
-                strip_index_format: None,
-                ..Default::default()
-            },
-            depth_stencil: None,
-            multisample: Default::default(),
-            fragment: Some(wgpu::FragmentState {
-                module: &shader_module,
-                entry_point: "fragment_main",
-                compilation_options: Default::default(),
-                targets: &[Some(format.into())]
-            }),
-            multiview: None,
-            cache: None,
-        });
 
+        let (pipeline_layout, uniform_buffer, uniform_bind_group) =
+            Pipelines::create_uniform(device, &[Mat4::IDENTITY]);
+
+        let render_pipeline = Pipelines::pipeline_builder(device)
+            .with_label("Default 3D Render Pipeline")
+            .with_layout(&pipeline_layout)
+            .with_vertex_shader(&vertex_shader_module)
+            .with_fragment_shader(&vertex_shader_module)
+            .with_vertex_entry_point("vertex_main")
+            .with_fragment_entry_point("fragment_main")
+            .with_vertex_buffers(&[Vertex::vertex_buf_layout()])
+            .with_color_state_targets(&[Some(format.into())])
+            .build();
 
         pipelines.registered_pipelines.insert(1, render_pipeline);
         pipelines.shader_to_pipeline_id_map.insert(
             shader_handle.clone(),
             1
         );
+        pipelines.render_pipeline_state.insert(1, (pipeline_layout, uniform_buffer, uniform_bind_group));
+
     } else {
         error!("Unable to create default pipeline because default shaders were not loaded");
     }
@@ -198,38 +193,20 @@ pub fn add_default_2d_render_resources(
         }
     );
 
-
-
     shaders_state.loaded_shader_modules.insert(shader_handle.clone(), shader_module);
 
     if let Some(shader_module) = shaders_state.loaded_shader_modules.get(&shader_handle.clone()) {
         let format = renderer_state.config.format.clone();
-        let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: None,
-            layout: None,
-            vertex: wgpu::VertexState {
-                module: &shader_module,
-                entry_point: "vertex_main",
-                compilation_options: Default::default(),
-                buffers: &[Vertex2D::vertex_buf_layout()],
-            },
-            primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleList,
-                strip_index_format: None,
-                ..Default::default()
-            },
-            depth_stencil: None,
-            multisample: Default::default(),
-            fragment: Some(wgpu::FragmentState {
-                module: &shader_module,
-                entry_point: "fragment_main",
-                compilation_options: Default::default(),
-                targets: &[Some(format.into())]
-            }),
-            multiview: None,
-            cache: None,
-        });
 
+        let render_pipeline = Pipelines::pipeline_builder(device)
+            .with_label("Default 2D Render Pipeline")
+            .with_vertex_shader(&shader_module)
+            .with_fragment_shader(&shader_module)
+            .with_vertex_entry_point("vertex_main")
+            .with_fragment_entry_point("fragment_main")
+            .with_vertex_buffers(&[Vertex2D::vertex_buf_layout()])
+            .with_color_state_targets(&[Some(format.into())])
+            .build();
 
         pipelines.registered_pipelines.insert(2, render_pipeline);
         pipelines.shader_to_pipeline_id_map.insert(
@@ -242,11 +219,18 @@ pub fn add_default_2d_render_resources(
 }
 
 pub fn pre_render(
-    _commands: Commands,
-    _renderer_state: ResMut<RendererState>,
-    _shaders: ResMut<ShadersState>,
-    _pipelines: Res<Pipelines>
+    window_state: ResMut<WindowState>,
+    renderer_state: ResMut<RendererState>,
+    pipelines: ResMut<Pipelines>,
+    camera: Query<&Camera>,
 ) {
+    let (pipeline_layout, uniform_buffer, uniform_bind_group) = pipelines.render_pipeline_state.get(&1).unwrap();
+
+    let camera = camera.single();
+    let aspect_ratio = window_state.window().inner_size().width as f32 / window_state.window().inner_size().height as f32;
+    let mvp_matrix = Mat4::perspective_rh(2.0*PI/5.0, aspect_ratio, 0.1, 100.0) * camera.transform.inverse();
+
+    renderer_state.queue.write_buffer(&uniform_buffer, 0, bytemuck::cast_slice(&[mvp_matrix]));
 }
 
 pub fn render2d(
@@ -304,7 +288,7 @@ pub fn render2d(
 
 }
 
-pub fn render(
+pub fn render3d(
     renderable_entities: Query<(&Renderable, &Mesh)>,
     render_pipelines_opt: Option<ResMut<Pipelines>>,
     gpu_meshes: Res<GpuMeshes>,
@@ -320,8 +304,9 @@ pub fn render(
             label: Some("Main rendering command encoder")
         });
         for (renderable, mesh) in &renderable_entities {
+            let pipeline_id = pipelines.get_pipeline_id(&mesh.vertex_shader_handle);
             let pipeline_opt = &pipelines.registered_pipelines
-                .get(&pipelines.get_pipeline_id(&mesh.vertex_shader_handle));
+                .get(&pipeline_id);
             let vertex_buffer_opt = gpu_meshes.buffers_map.get(&mesh.vertex_buffer_id);
 
 
@@ -342,6 +327,11 @@ pub fn render(
                 });
                 render_pass.set_pipeline(pipeline);
                 render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
+
+                if let Some((_, _, uniform_bind_group)) = pipelines.render_pipeline_state.get(&pipeline_id) {
+                    render_pass.set_bind_group(0, &uniform_bind_group, &[]);
+                }
+
                 if let Some(Some(index_buffer)) = &mesh.has_indices().then(|| gpu_meshes.buffers_map.get(&mesh.index_buffer_id)) {
                     render_pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
                     render_pass.draw_indexed(0..mesh.num_indices() as u32, 0, 0..1);
@@ -397,46 +387,3 @@ pub struct Renderable {
     pipline_id: u64,
 }
 
-#[repr(C)]
-#[derive(Copy, Clone, Debug, Pod, Zeroable)]
-pub struct Vertex {
-    pub position: [f32; 3],
-    pub color: [f32; 3],
-}
-
-impl Vertex {
-    const ATTRIBUTES: [wgpu::VertexAttribute; 2] = wgpu::vertex_attr_array![
-        0 => Float32x3,
-        1 => Float32x3
-    ];
-
-    pub fn vertex_buf_layout<'a>() -> wgpu::VertexBufferLayout<'a> {
-        wgpu::VertexBufferLayout {
-            array_stride: size_of::<Vertex>() as wgpu::BufferAddress,
-            step_mode: wgpu::VertexStepMode::Vertex,
-            attributes: &Self::ATTRIBUTES,
-        }
-    }
-}
-
-#[repr(C)]
-#[derive(Copy, Clone, Debug, Pod, Zeroable)]
-pub struct Vertex2D {
-    pub position: [f32; 2],
-    pub color: [f32; 3],
-}
-
-impl Vertex2D {
-    const ATTRIBUTES: [wgpu::VertexAttribute; 2] = wgpu::vertex_attr_array![
-        0 => Float32x2,
-        1 => Float32x3
-    ];
-
-    pub fn vertex_buf_layout<'a>() -> wgpu::VertexBufferLayout<'a> {
-        wgpu::VertexBufferLayout {
-            array_stride: size_of::<Vertex2D>() as wgpu::BufferAddress,
-            step_mode: wgpu::VertexStepMode::Vertex,
-            attributes: &Self::ATTRIBUTES,
-        }
-    }
-}

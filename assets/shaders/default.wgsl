@@ -17,7 +17,7 @@ struct VertexOutput {
 @vertex
 fn vertex_main(vertex_in: VertexInput) -> VertexOutput {
     var vertex_out: VertexOutput;
-    vertex_out.position = vec4<f32>(vertex_in.position, 1.0);
+    vertex_out.position = uniforms.modelViewProjectionMat * vec4<f32>(vertex_in.position, 1.0);
     vertex_out.color = vec4<f32>(vertex_in.color, 1.0);
     return vertex_out;
 }

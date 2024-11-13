@@ -1,4 +1,4 @@
-use bevy::asset::{ron, AssetLoader, LoadContext};
+use bevy::asset::{AssetLoader, LoadContext};
 use bevy::asset::io::Reader;
 use bevy::prelude::{Asset, Handle, Resource, TypePath};
 use bevy::utils::HashMap;
@@ -13,16 +13,6 @@ pub type ShaderPath = String;
 pub struct ShadersState {
     pub(crate) loaded_shader_modules: HashMap<Handle<Shader>, wgpu::ShaderModule>,
     pub shader_handles: Vec<Handle<Shader>>,
-}
-
-impl ShadersState {
-    pub fn default_2d_shader_id() -> u64 {
-        2
-    }
-
-    pub fn default_shader_id() -> u64 {
-        1
-    }
 }
 
 #[derive(Asset, TypePath)]
@@ -47,9 +37,9 @@ impl AssetLoader for ShaderAssetLoader {
         &self,
         reader: &mut dyn Reader,
         _settings: &(),
-        _load_context: &mut LoadContext<'_>,
+        load_context: &mut LoadContext<'_>,
     ) -> Result<Self::Asset, Self::Error> {
-        log::debug!("Loading shader using ShaderAssetLoader");
+        log::debug!("Loading shader using ShaderAssetLoader, asset path={:?}", load_context.path());
         let mut bytes = Vec::new();
         if let Ok(_) = reader.read_to_end(&mut bytes).await {
             let custom_asset = Shader {

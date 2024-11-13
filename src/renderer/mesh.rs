@@ -71,7 +71,7 @@ impl Mesh {
 }
 
 pub fn setup_on_add_hook_for_mesh(world: &mut World) {
-    world.register_component_hooks::<Mesh2D>().on_add(create_gpu_buffer_for_mesh);
+    world.register_component_hooks::<Mesh>().on_add(create_gpu_buffer_for_mesh);
 }
 
 
