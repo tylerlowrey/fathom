@@ -1,7 +1,7 @@
 use std::f32::consts::PI;
 use bevy::prelude::*;
 use log::{error, info};
-use fathom::app::{schedule, GameApplication};
+use fathom::app::{schedule, FathomApplication, WinitApplicationState};
 use fathom::assets::shaders::{Shader, ShadersState};
 use fathom::renderer::camera::Camera;
 use fathom::renderer::mesh::{Mesh, Mesh2D};
@@ -9,16 +9,15 @@ use fathom::renderer::vertex::Vertex;
 
 fn main() {
     env_logger::builder().filter_level(log::LevelFilter::Debug).init();
-    let mut app = GameApplication::new();
+    let mut app = FathomApplication::with_3d_renderer();
 
-    app.add_renderer_3d();
-    app.add_system_to_schedule(schedule::Startup, startup);
-    app.add_system_to_schedule(schedule::Update, update);
+    app.add_systems(schedule::Startup, startup);
+    app.add_systems(schedule::Update, update);
 
     let app_run_result = app.run();
 
-    if let Err(error) = app_run_result {
-        error!("App run failed: {}", error);
+    if let AppExit::Error(error) = app_run_result {
+        error!("App run failed with error code: {}", error);
     }
 
     info!("App finished, exiting...")

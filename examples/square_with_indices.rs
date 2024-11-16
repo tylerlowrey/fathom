@@ -1,17 +1,16 @@
 use bevy::asset::{AssetServer, Handle};
 use bevy::prelude::{Commands, ResMut};
-use fathom::app::{schedule, GameApplication};
-use fathom::assets::shaders::{Shader};
-use fathom::renderer::mesh::{Mesh2D};
+use fathom::app::{schedule, FathomApplication};
+use fathom::assets::shaders::Shader;
+use fathom::renderer::mesh::Mesh2D;
 use fathom::renderer::vertex::Vertex2D;
 
 fn main() {
-    let mut app = GameApplication::new();
+    let mut app = FathomApplication::with_2d_renderer();
 
-    app.add_renderer_2d();
-    app.add_system_to_schedule(schedule::Startup, startup);
+    app.add_systems(schedule::Startup, startup);
 
-    let _ = app.run().unwrap();
+    let _ = app.run();
 }
 
 fn startup(
