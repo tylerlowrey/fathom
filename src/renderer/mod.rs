@@ -9,13 +9,46 @@ use bevy::prelude::*;
 use bevy::utils::HashMap;
 use wgpu::{CompositeAlphaMode, InstanceDescriptor, StoreOp};
 use log::{error};
+use crate::app::schedule::{Initialization, PreRender, Render};
 use crate::app::WindowState;
 use crate::assets::shaders::{Shader, ShadersState, DEFAULT_2D_SHADER, DEFAULT_3D_SHADER};
-use crate::assets::tick_task_pools;
+use crate::assets::{initialize_asset_server, tick_task_pools};
 use crate::renderer::camera::Camera;
-use crate::renderer::mesh::{GpuMeshes, Mesh, Mesh2D};
+use crate::renderer::mesh::{setup_on_add_hook_for_mesh, setup_on_add_hook_for_mesh2d, GpuMeshes, Mesh, Mesh2D};
 use crate::renderer::pipeline::Pipelines;
 use crate::renderer::vertex::{Vertex, Vertex2D};
+
+pub struct Fathom3DRenderPlugin;
+
+impl Plugin for Fathom3DRenderPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_systems(Initialization, (
+            initialize_renderer,
+            initialize_asset_server,
+            initialize_render_resources,
+            add_default_render_resources,
+            setup_on_add_hook_for_mesh
+        ).chain());
+        app.add_systems(PreRender, pre_render);
+        app.add_systems(Render, render3d);
+        app.add_systems(Last, tick_task_pools);
+    }
+}
+
+pub struct Fathom2DRenderPlugin;
+impl Plugin for Fathom2DRenderPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_systems(Initialization, (
+            initialize_renderer,
+            initialize_asset_server,
+            initialize_render_resources,
+            add_default_2d_render_resources,
+            setup_on_add_hook_for_mesh2d
+        ).chain());
+        app.add_systems(Render, render2d);
+        app.add_systems(Last, tick_task_pools);
+    }
+}
 
 pub fn initialize_renderer(mut commands: Commands, window_state: ResMut<WindowState>) {
     let window = window_state.clone_window();
@@ -51,8 +84,6 @@ pub fn initialize_renderer(mut commands: Commands, window_state: ResMut<WindowSt
         device,
         queue,
     });
-
-
 }
 
 pub fn initialize_render_resources(

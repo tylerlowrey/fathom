@@ -1,17 +1,16 @@
 use bevy::prelude::*;
-use fathom::app::{schedule, GameApplication};
-use fathom::assets::shaders::{Shader};
+use fathom::app::{schedule, FathomApplication};
+use fathom::assets::shaders::Shader;
 use fathom::renderer::camera::Camera;
 use fathom::renderer::mesh::Mesh;
 use fathom::renderer::vertex::Vertex;
 
 fn main() {
-    let mut app = GameApplication::new();
+    let mut app = FathomApplication::with_3d_renderer();
 
-    app.add_renderer_3d();
-    app.add_system_to_schedule(schedule::Startup, startup);
+    app.add_systems(schedule::Startup, startup);
 
-    let _ = app.run().unwrap();
+    let _ = app.run();
 }
 
 fn startup(
