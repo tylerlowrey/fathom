@@ -14,6 +14,7 @@ use crate::renderer::Fathom3DRenderPlugin;
 pub mod app;
 pub mod renderer;
 pub mod assets;
+pub mod input;
 
 struct FathomDefaultPlugins;
 

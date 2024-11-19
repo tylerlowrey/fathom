@@ -26,3 +26,7 @@ features = ["bevy_asset"]
 [[example]]
 name = "3d_offset_square"
 path = "examples/3d/offset_square.rs"
+
+[[example]]
+name = "3d_camera_controller"
+path = "examples/3d/camera_controller.rs"

@@ -10,6 +10,7 @@ use log::info;
 use crate::app::schedule::{Startup, Render, Update, PreRender, Initialization};
 use crate::assets::{initialize_asset_server, tick_task_pools};
 use crate::FathomDefaultPlugins;
+use crate::input::InputEvent;
 use crate::renderer::{add_default_2d_render_resources, add_default_render_resources, initialize_render_resources, initialize_renderer, pre_render, render3d, render2d, Fathom3DRenderPlugin, Fathom2DRenderPlugin};
 use crate::renderer::mesh::{setup_on_add_hook_for_mesh, setup_on_add_hook_for_mesh2d};
 
@@ -27,6 +28,7 @@ impl FathomApplication {
                 .run_if(event_update_condition),
         );
         app.add_event::<AppExit>();
+        app.add_event::<InputEvent>();
 
         // Disable the Fathom3DRenderPlugin because this function should return a barebones
         // fathom application but don't want to modify FathomDefaultPlugins itself
@@ -115,8 +117,11 @@ impl ApplicationHandler for WinitApplicationState {
             WindowEvent::RedrawRequested => {
                 self.app.update();
             }
+            WindowEvent::KeyboardInput { event: key_event, ..} => {
+                self.app.world_mut().send_event(InputEvent::Keyboard(key_event));
+            }
             _ => ()
-        }
+        };
     }
 
     fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {

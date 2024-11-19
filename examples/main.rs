@@ -1,6 +1,5 @@
 use std::f32::consts::PI;
 use bevy::prelude::*;
-use log::{error, info};
 use fathom::app::{schedule, FathomApplication, WinitApplicationState};
 use fathom::assets::shaders::{Shader, ShadersState};
 use fathom::renderer::camera::Camera;
@@ -8,7 +7,7 @@ use fathom::renderer::mesh::{Mesh, Mesh2D};
 use fathom::renderer::vertex::Vertex;
 
 fn main() {
-    env_logger::builder().filter_level(log::LevelFilter::Debug).init();
+    env_logger::builder().filter_level(log::LevelFilter::Warn).init();
     let mut app = FathomApplication::with_3d_renderer();
 
     app.add_systems(schedule::Startup, startup);
@@ -17,10 +16,10 @@ fn main() {
     let app_run_result = app.run();
 
     if let AppExit::Error(error) = app_run_result {
-        error!("App run failed with error code: {}", error);
+        log::error!("App run failed with error code: {}", error);
     }
 
-    info!("App finished, exiting...")
+    log::info!("App finished, exiting...")
 }
 
 fn startup(
@@ -84,7 +83,7 @@ fn startup(
 fn update(mut counter: ResMut<Counter>, mut camera_query: Query<&mut Camera>) {
     counter.count += 1;
     if counter.count % 10 == 0 {
-        info!("Count reached: {}", counter.count);
+        log::warn!("Count reached: {}", counter.count);
         let count = (counter.count as f32 % 1000.0) / 1000.0;
         let mut camera = camera_query.single_mut();
         camera.transform = Mat4::from_rotation_y((count * (4.0 * PI)) - (2.0 * PI)) * camera.transform;
