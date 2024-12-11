@@ -1,7 +1,10 @@
 use std::f32::consts::PI;
 use bevy::prelude::*;
+use winit::event::{ElementState, KeyEvent};
+use winit::keyboard::PhysicalKey;
 use fathom::app::{schedule, FathomApplication, WinitApplicationState};
 use fathom::assets::shaders::{Shader, ShadersState};
+use fathom::input::InputEvent;
 use fathom::renderer::camera::Camera;
 use fathom::renderer::mesh::{Mesh, Mesh2D};
 use fathom::renderer::vertex::Vertex;
@@ -26,28 +29,7 @@ fn startup(
     mut commands: Commands,
     mut asset_server: ResMut<AssetServer>
 ) {
-    commands.insert_resource(Counter {
-        count: 0
-    });
-
-    let shader_handle: Handle<Shader> = asset_server.load("shaders/default.wgsl");
-
-    /*
-    commands.spawn(Mesh::with_indices(
-        shader_handle.clone(),
-        shader_handle.clone(),
-        vec![
-            Vertex { position: [3.0, 3.0, -1.0], color: [0.0, 0.0, 1.0] },
-            Vertex { position: [3.0, 1.0, -1.0], color: [0.0, 0.0, 1.0] },
-            Vertex { position: [3.0, 3.0, 1.0], color: [0.0, 0.0, 1.0] },
-            Vertex { position: [3.0, 1.0, 1.0], color: [0.0, 0.0, 1.0] },
-            Vertex { position: [1.0, 3.0, -1.0], color: [0.0, 0.0, 1.0] },
-            Vertex { position: [1.0, 1.0, -1.0], color: [0.0, 0.0, 1.0] },
-            Vertex { position: [1.0, 3.0, 1.0], color: [0.0, 0.0, 1.0] },
-            Vertex { position: [1.0, 1.0, 1.0], color: [0.0, 0.0, 1.0] },
-        ],
-        vec![1, 5, 7, 3, 4, 3, 7, 8, 8, 7, 5, 6, 6, 2, 4, 8, 2, 1, 3, 4, 6, 5, 1, 2]
-    ));*/
+    let shader_handle: Handle<Shader> = asset_server.load("shaders/custom_3d_shader.wgsl");
 
     commands.spawn(Mesh::with_indices(
         shader_handle.clone(),
@@ -78,19 +60,26 @@ fn startup(
     });
 }
 
-
-
-fn update(mut counter: ResMut<Counter>, mut camera_query: Query<&mut Camera>) {
-    counter.count += 1;
-    if counter.count % 10 == 0 {
-        log::warn!("Count reached: {}", counter.count);
-        let count = (counter.count as f32 % 1000.0) / 1000.0;
-        let mut camera = camera_query.single_mut();
-        camera.transform = Mat4::from_rotation_y((count * (4.0 * PI)) - (2.0 * PI)) * camera.transform;
+fn update(
+    mut camera_query: Query<&mut Camera>,
+    mut input_events: EventReader<InputEvent>
+) {
+    let mut camera = camera_query.single_mut();
+    for InputEvent::Keyboard(KeyEvent { physical_key,  state, ..}) in input_events.read() {
+        match (physical_key, state) {
+            (PhysicalKey::Code(winit::keyboard::KeyCode::KeyW), ElementState::Pressed) => {
+                camera.transform.w_axis.z -= 0.5;
+            },
+            (PhysicalKey::Code(winit::keyboard::KeyCode::KeyS), ElementState::Pressed) => {
+                camera.transform.w_axis.z += 0.5;
+            },
+            (PhysicalKey::Code(winit::keyboard::KeyCode::KeyA), ElementState::Pressed) => {
+                camera.transform.w_axis.x -= 0.5;
+            },
+            (PhysicalKey::Code(winit::keyboard::KeyCode::KeyD), ElementState::Pressed) => {
+                camera.transform.w_axis.x += 0.5;
+            },
+            _ => ()
+        }
     }
-}
-
-#[derive(Resource, Default)]
-struct Counter {
-    pub count: u64
 }

@@ -9,7 +9,6 @@ use bevy::ecs::schedule::ExecutorKind;
 use bevy::prelude::{AppExit, Local, Mut, Plugin, PluginGroup, Schedule, World};
 use winit::event_loop::{ControlFlow, EventLoop};
 use crate::app::{schedule, WinitApplicationState};
-use crate::renderer::Fathom3DRenderPlugin;
 
 pub mod app;
 pub mod renderer;
@@ -22,7 +21,6 @@ impl PluginGroup for FathomDefaultPlugins {
     fn build(self) -> PluginGroupBuilder {
         PluginGroupBuilder::start::<Self>()
             .add(FathomRunnerPlugin)
-            .add(Fathom3DRenderPlugin)
     }
 }
 
@@ -38,6 +36,14 @@ impl Plugin for FathomRunnerPlugin {
         let mut main_schedule = Schedule::new(schedule::Main);
         // TODO: Figure out why bevy does this for "facilitator" schedules
         main_schedule.set_executor_kind(ExecutorKind::SingleThreaded);
+
+        app.add_schedule(Schedule::new(schedule::Initialization));
+        app.add_schedule(Schedule::new(schedule::Startup));
+        app.add_schedule(Schedule::new(schedule::PostStartup));
+        app.add_schedule(Schedule::new(schedule::First));
+        app.add_schedule(Schedule::new(schedule::Update));
+        app.add_schedule(Schedule::new(schedule::PreRender));
+        app.add_schedule(Schedule::new(schedule::Last));
 
         app.add_schedule(main_schedule)
             .init_resource::<schedule::MainScheduleOrder>()
@@ -64,7 +70,8 @@ pub fn run_main(world: &mut World, mut run_at_least_once: Local<bool>) {
     if !*run_at_least_once {
         world.resource_scope(|world, order: Mut<schedule::MainScheduleOrder>| {
             for &label in &order.startup_only_labels {
-                let _ = world.try_run_schedule(label);
+                log::debug!("Running {:?} startup label", label);
+                let _ = world.run_schedule(label);
             }
         });
         *run_at_least_once = true;
@@ -72,7 +79,7 @@ pub fn run_main(world: &mut World, mut run_at_least_once: Local<bool>) {
 
     world.resource_scope(|world, order: Mut<schedule::MainScheduleOrder>| {
         for &label in &order.non_startup_labels {
-            let _ = world.try_run_schedule(label);
+            let _ = world.run_schedule(label);
         }
     });
 }

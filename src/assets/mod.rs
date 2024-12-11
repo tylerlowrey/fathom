@@ -4,6 +4,7 @@ use bevy::ecs::event::EventRegistry;
 use bevy::prelude::*;
 use bevy::tasks::{AsyncComputeTaskPool, ComputeTaskPool, IoTaskPool, TaskPoolBuilder};
 use crate::app::schedule;
+use crate::assets::materials::Material;
 use crate::assets::shaders::{Shader, ShaderAssetLoader};
 
 const DEFAULT_ASSETS_PATH: &str = "assets";
@@ -12,6 +13,7 @@ const DEFAULT_ASYNC_COMPUTE_THREADS_COUNT: usize = 2;
 const DEFAULT_COMPUTE_THREADS_COUNT: usize = 2;
 
 pub mod shaders;
+pub mod materials;
 
 
 pub fn initialize_asset_server(world: &mut World) {
@@ -31,13 +33,19 @@ pub fn initialize_asset_server(world: &mut World) {
     asset_server.register_asset(&shader_assets);
     asset_server.register_loader(shader_asset_loader);
 
+    asset_server.register_asset(&Assets::<Material>::default());
+
     world.insert_resource(asset_server);
     world.insert_resource(shader_assets);
 
     EventRegistry::register_event::<AssetEvent<Shader>>(world);
     EventRegistry::register_event::<AssetLoadFailedEvent<Shader>>(world);
+
+    EventRegistry::register_event::<AssetEvent<Material>>(world);
+
     let registry = world.resource_mut::<AppTypeRegistry>();
     registry.write().register::<Handle<Shader>>();
+    registry.write().register::<Handle<Material>>();
 
     let mut schedules = world.resource_mut::<Schedules>();
     schedules.add_systems(

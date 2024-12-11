@@ -6,6 +6,7 @@ use fathom::renderer::mesh::Mesh;
 use fathom::renderer::vertex::Vertex;
 
 fn main() {
+    env_logger::builder().filter_level(log::LevelFilter::Trace).init();
     let mut app = FathomApplication::with_3d_renderer();
 
     app.add_systems(schedule::Startup, startup);
@@ -19,8 +20,6 @@ fn startup(
 ) {
     let shader_handle: Handle<Shader> = asset_server.load("shaders/default.wgsl");
     commands.spawn(Mesh::with_indices(
-        shader_handle.clone(),
-        shader_handle.clone(),
         vec![
             Vertex { position: [-1.0, -1.0,  1.0], color: [1.0, 0.0, 1.0] },
             Vertex { position: [ 1.0, -1.0,  1.0], color: [1.0, 0.0, 1.0] },

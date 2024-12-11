@@ -2,20 +2,26 @@ use bevy::prelude::*;
 use bevy::utils::HashMap;
 use bytemuck::NoUninit;
 use wgpu::util::DeviceExt;
-use crate::assets::shaders::Shader;
+use crate::assets::materials::Material;
 
-type PipelineId = u64;
+pub type PipelineId = u64;
 #[derive(Resource)]
 pub struct Pipelines {
     pub(crate) registered_pipelines: HashMap<PipelineId, wgpu::RenderPipeline>,
-    pub(crate) shader_to_pipeline_id_map: HashMap<Handle<Shader>, PipelineId>,
-    pub(crate) render_pipeline_state: HashMap<PipelineId, (wgpu::PipelineLayout, wgpu::Buffer, wgpu::BindGroup)>
+    pub(crate) material_to_pipeline_id_map: HashMap<Handle<Material>, PipelineId>,
+    pub(crate) render_pipeline_state: HashMap<PipelineId, (wgpu::PipelineLayout, wgpu::Buffer, wgpu::BindGroup)>,
+    pub default_material: Option<Handle<Material>>
 }
 
 impl Pipelines {
-    pub fn get_pipeline_id(&self, shader_handle: &Handle<Shader>) -> u64 {
-        self.shader_to_pipeline_id_map.get(shader_handle)
-            .unwrap_or(&0u64).clone()
+    pub fn get_pipeline_id_by_material(&self, material: Handle<Material>) -> Option<&PipelineId> {
+         self.material_to_pipeline_id_map.get(&material)
+    }
+    pub fn get_pipeline_by_material(&self, material: Handle<Material>) -> Option<&wgpu::RenderPipeline> {
+        if let Some(pipeline_id) = self.material_to_pipeline_id_map.get(&material) {
+            return self.registered_pipelines.get(pipeline_id)
+        }
+        None
     }
 
     pub fn pipeline_builder(device: &wgpu::Device) -> PipelineBuilder {

@@ -1,7 +1,9 @@
 pub mod mesh;
 pub mod camera;
-mod pipeline;
+pub mod pipeline;
 pub mod vertex;
+pub mod texture;
+pub mod material;
 
 use std::f32::consts::PI;
 use bevy::asset::{handle_internal_asset_events, LoadState};
@@ -13,7 +15,9 @@ use crate::app::schedule::{Initialization, PreRender, Render};
 use crate::app::WindowState;
 use crate::assets::shaders::{Shader, ShadersState, DEFAULT_2D_SHADER, DEFAULT_3D_SHADER};
 use crate::assets::{initialize_asset_server, tick_task_pools};
+use crate::assets::materials::Material;
 use crate::renderer::camera::Camera;
+use crate::renderer::material::{DefaultMaterial, MeshMaterial};
 use crate::renderer::mesh::{setup_on_add_hook_for_mesh, setup_on_add_hook_for_mesh2d, GpuMeshes, Mesh, Mesh2D};
 use crate::renderer::pipeline::Pipelines;
 use crate::renderer::vertex::{Vertex, Vertex2D};
@@ -30,7 +34,7 @@ impl Plugin for Fathom3DRenderPlugin {
             setup_on_add_hook_for_mesh
         ).chain());
         app.add_systems(PreRender, pre_render);
-        app.add_systems(Render, render3d);
+        app.add_systems(Render, default_3d_render_pass);
         app.add_systems(Last, tick_task_pools);
     }
 }
@@ -50,7 +54,8 @@ impl Plugin for Fathom2DRenderPlugin {
     }
 }
 
-pub fn initialize_renderer(mut commands: Commands, window_state: ResMut<WindowState>) {
+pub fn initialize_renderer(mut world: &mut World) {
+    let window_state = world.get_resource_mut::<WindowState>().unwrap();
     let window = window_state.clone_window();
     let instance = wgpu::Instance::new(InstanceDescriptor::default());
     let surface = instance.create_surface(window.clone())
@@ -76,7 +81,7 @@ pub fn initialize_renderer(mut commands: Commands, window_state: ResMut<WindowSt
     };
     surface.configure(&device, &config);
 
-    commands.insert_resource(RendererState {
+    world.insert_resource(RendererState {
         instance,
         config,
         surface,
@@ -87,7 +92,7 @@ pub fn initialize_renderer(mut commands: Commands, window_state: ResMut<WindowSt
 }
 
 pub fn initialize_render_resources(
-    mut world: &mut World,
+    world: &mut World,
 ) {
     let asset_server = world.get_resource::<AssetServer>().unwrap();
     let default_3d_shader: Handle<Shader> = asset_server.load(DEFAULT_3D_SHADER);
@@ -127,8 +132,9 @@ pub fn initialize_render_resources(
 
     world.insert_resource(Pipelines {
         registered_pipelines: HashMap::new(),
-        shader_to_pipeline_id_map: HashMap::new(),
+        material_to_pipeline_id_map: HashMap::new(),
         render_pipeline_state: HashMap::new(),
+        default_material: None,
     });
 
     let mut shader_state = ShadersState {
@@ -151,8 +157,9 @@ pub fn add_default_render_resources(
     mut shaders_state: ResMut<ShadersState>,
     mut pipelines: ResMut<Pipelines>,
     shader_assets: Res<Assets<Shader>>,
+    mut materials: ResMut<Assets<Material>>
 ) {
-    tick_task_pools();
+    log::debug!("Adding default render resources...");
     let device = &renderer_state.as_ref().device;
     let shader_handle = shaders_state.shader_handles.get(0)
         .expect("No shader handles available. Default shader should be the first element")
@@ -175,7 +182,7 @@ pub fn add_default_render_resources(
 
     shaders_state.loaded_shader_modules.insert(shader_handle.clone(), shader_module);
 
-    if let (Some(vertex_shader_module), Some(fragment_shader_module)) =
+    if let (Some(vertex_shader_module), Some(_fragment_shader_module)) =
         (shaders_state.loaded_shader_modules.get(&shader_handle.clone()), shaders_state.loaded_shader_modules.get(&shader_handle.clone())) {
         let format = renderer_state.config.format.clone();
 
@@ -194,8 +201,13 @@ pub fn add_default_render_resources(
             .build();
 
         pipelines.registered_pipelines.insert(1, render_pipeline);
-        pipelines.shader_to_pipeline_id_map.insert(
-            shader_handle.clone(),
+        let default_material_handle = materials.add(Material {
+            vertex_shader: shader_handle.clone(),
+            fragment_shader: shader_handle.clone(),
+            material_pipeline_id: 1,
+        });
+        pipelines.material_to_pipeline_id_map.insert(
+            default_material_handle,
             1
         );
         pipelines.render_pipeline_state.insert(1, (pipeline_layout, uniform_buffer, uniform_bind_group));
@@ -209,7 +221,8 @@ pub fn add_default_2d_render_resources(
     renderer_state: Res<RendererState>,
     mut shaders_state: ResMut<ShadersState>,
     mut pipelines: ResMut<Pipelines>,
-    mut shader_assets: ResMut<Assets<Shader>>,
+    shader_assets: Res<Assets<Shader>>,
+    mut materials: ResMut<Assets<Material>>
 ) {
     let device = &renderer_state.as_ref().device;
     let shader_handle = shaders_state.shader_handles.get(1)
@@ -240,8 +253,13 @@ pub fn add_default_2d_render_resources(
             .build();
 
         pipelines.registered_pipelines.insert(2, render_pipeline);
-        pipelines.shader_to_pipeline_id_map.insert(
-            shader_handle.clone(),
+        let default_material_handle = materials.add(Material {
+            vertex_shader: Default::default(),
+            fragment_shader: Default::default(),
+            material_pipeline_id: 1,
+        });
+        pipelines.material_to_pipeline_id_map.insert(
+            default_material_handle,
             2
         );
     } else {
@@ -255,7 +273,7 @@ pub fn pre_render(
     pipelines: ResMut<Pipelines>,
     camera: Query<&Camera>,
 ) {
-    let (pipeline_layout, uniform_buffer, uniform_bind_group) = pipelines.render_pipeline_state.get(&1).unwrap();
+    let (_pipeline_layout, uniform_buffer, _uniform_bind_group) = pipelines.render_pipeline_state.get(&1).unwrap();
 
     let camera = camera.single();
     let aspect_ratio = window_state.window().inner_size().width as f32 / window_state.window().inner_size().height as f32;
@@ -265,12 +283,13 @@ pub fn pre_render(
 }
 
 pub fn render2d(
-    renderable_entities: Query<(&Renderable, &Mesh2D)>,
-    render_pipelines_opt: Option<ResMut<Pipelines>>,
+    renderable_entities: Query<&Mesh2D>,
+    pipelines: ResMut<Pipelines>,
+    default_material_opt: Option<ResMut<DefaultMaterial>>,
     gpu_meshes: Res<GpuMeshes>,
     renderer_state: Res<RendererState>,
 ) {
-    if let Some(pipelines) = render_pipelines_opt.as_ref() {
+    if let Some(default_material) = default_material_opt.as_ref() {
         let device = &renderer_state.device;
         let queue = &renderer_state.queue;
         let surface = &renderer_state.surface;
@@ -279,9 +298,11 @@ pub fn render2d(
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("Main rendering command encoder")
         });
-        for (renderable, mesh) in &renderable_entities {
+        for mesh in &renderable_entities {
+            let pipeline_id = pipelines.get_pipeline_id_by_material(default_material.0.clone())
+                .unwrap_or_else(|| panic!("Unable to get pipeline id for default material"));
             let pipeline_opt = &pipelines.registered_pipelines
-                .get(&pipelines.get_pipeline_id(&mesh.vertex_shader_handle));
+                .get(pipeline_id);
             let vertex_buffer_opt = gpu_meshes.buffers_map.get(&mesh.vertex_buffer_id);
 
 
@@ -309,7 +330,7 @@ pub fn render2d(
                     render_pass.draw(0..mesh.num_vertices() as u32, 0..1);
                 }
             } else {
-                error!("Unable to perform render pass for pipeline_id={} | vertex_buffer_id={}", renderable.pipline_id, mesh.vertex_buffer_id);
+                error!("Unable to perform render pass for pipeline_id={} | vertex_buffer_id={}", pipeline_id, mesh.vertex_buffer_id);
             }
         }
 
@@ -319,13 +340,15 @@ pub fn render2d(
 
 }
 
-pub fn render3d(
-    renderable_entities: Query<(&Renderable, &Mesh)>,
-    render_pipelines_opt: Option<ResMut<Pipelines>>,
+/// This system renders any 3D Meshes that do not have a Material component. It uses the default 3d shader
+pub fn default_3d_render_pass(
+    renderable_entities: Query<&Mesh, Without<MeshMaterial>>,
+    pipelines: ResMut<Pipelines>,
+    default_material_opt: Option<ResMut<DefaultMaterial>>,
     gpu_meshes: Res<GpuMeshes>,
     renderer_state: Res<RendererState>,
 ) {
-    if let Some(pipelines) = render_pipelines_opt.as_ref() {
+    if let Some(default_material) = default_material_opt.as_ref() {
         let device = &renderer_state.device;
         let queue = &renderer_state.queue;
         let surface = &renderer_state.surface;
@@ -334,10 +357,12 @@ pub fn render3d(
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("Main rendering command encoder")
         });
-        for (renderable, mesh) in &renderable_entities {
-            let pipeline_id = pipelines.get_pipeline_id(&mesh.vertex_shader_handle);
+
+        for mesh in &renderable_entities {
+            let pipeline_id = pipelines.get_pipeline_id_by_material(default_material.0.clone())
+                .unwrap_or_else(|| panic!("Unable to get pipeline id for default material"));
             let pipeline_opt = &pipelines.registered_pipelines
-                .get(&pipeline_id);
+                .get(pipeline_id);
             let vertex_buffer_opt = gpu_meshes.buffers_map.get(&mesh.vertex_buffer_id);
 
 
@@ -359,7 +384,7 @@ pub fn render3d(
                 render_pass.set_pipeline(pipeline);
                 render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
 
-                if let Some((_, _, uniform_bind_group)) = pipelines.render_pipeline_state.get(&pipeline_id) {
+                if let Some((_, _, uniform_bind_group)) = pipelines.render_pipeline_state.get(pipeline_id) {
                     render_pass.set_bind_group(0, &uniform_bind_group, &[]);
                 }
 
@@ -370,7 +395,7 @@ pub fn render3d(
                     render_pass.draw(0..mesh.num_vertices() as u32, 0..1);
                 }
             } else {
-                error!("Unable to perform render pass for pipeline_id={} | vertex_buffer_id={}", renderable.pipline_id, mesh.vertex_buffer_id);
+                error!("Unable to perform render pass for pipeline_id={} | vertex_buffer_id={}", pipeline_id, mesh.vertex_buffer_id);
             }
         }
 
@@ -414,7 +439,5 @@ pub struct RendererState {
 
 /// Each entity that will be rendered must have this component
 #[derive(Component, Default)]
-pub struct Renderable {
-    pipline_id: u64,
-}
+pub struct Renderable;
 

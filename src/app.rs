@@ -4,14 +4,13 @@ use bevy::ecs::schedule::ScheduleLabel;
 use bevy::prelude::*;
 use winit::application::ApplicationHandler;
 use winit::event::{WindowEvent};
-use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
-use winit::error::EventLoopError;
+use winit::event_loop::ActiveEventLoop;
 use log::info;
-use crate::app::schedule::{Startup, Render, Update, PreRender, Initialization};
+use crate::app::schedule::{Render, PreRender, Initialization};
 use crate::assets::{initialize_asset_server, tick_task_pools};
 use crate::FathomDefaultPlugins;
 use crate::input::InputEvent;
-use crate::renderer::{add_default_2d_render_resources, add_default_render_resources, initialize_render_resources, initialize_renderer, pre_render, render3d, render2d, Fathom3DRenderPlugin, Fathom2DRenderPlugin};
+use crate::renderer::{add_default_2d_render_resources, add_default_render_resources, initialize_render_resources, initialize_renderer, pre_render, default_3d_render_pass, render2d, Fathom3DRenderPlugin, Fathom2DRenderPlugin};
 use crate::renderer::mesh::{setup_on_add_hook_for_mesh, setup_on_add_hook_for_mesh2d};
 
 pub struct FathomApplication;
@@ -34,7 +33,6 @@ impl FathomApplication {
         // fathom application but don't want to modify FathomDefaultPlugins itself
         app.add_plugins(
             FathomDefaultPlugins.build()
-                .disable::<Fathom3DRenderPlugin>()
         );
 
         app
@@ -67,34 +65,6 @@ impl WinitApplicationState {
         Self {
             app
         }
-    }
-
-    pub fn add_renderer_2d(&mut self) {
-        let mut schedules = self.app.world_mut().resource_mut::<Schedules>();
-        schedules.add_systems(Initialization, (
-            initialize_renderer,
-            initialize_asset_server,
-            initialize_render_resources,
-            add_default_2d_render_resources,
-            setup_on_add_hook_for_mesh2d
-        ).chain());
-        schedules.add_systems(PreRender, pre_render);
-        schedules.add_systems(Render, render2d);
-        schedules.add_systems(Last, tick_task_pools);
-    }
-
-    pub fn add_renderer_3d(&mut self) {
-        let mut schedules = self.app.world_mut().resource_mut::<Schedules>();
-        schedules.add_systems(Initialization, (
-            initialize_renderer,
-            initialize_asset_server,
-            initialize_render_resources,
-            add_default_render_resources,
-            setup_on_add_hook_for_mesh
-        ).chain());
-        schedules.add_systems(PreRender, pre_render);
-        schedules.add_systems(Render, render3d);
-        schedules.add_systems(Last, tick_task_pools);
     }
 }
 
